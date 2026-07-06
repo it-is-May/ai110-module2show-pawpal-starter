@@ -23,12 +23,14 @@ classDiagram
         +Priority priority
         +Frequency frequency
         +bool completed
+        +mark_complete() None
     }
 
     class Pet {
         +str name
         +str species
         +list~Task~ tasks
+        +add_task(task) None
     }
 
     class Owner {
@@ -58,11 +60,11 @@ classDiagram
 
     class Scheduler {
         +generate_plan(owner, constraints) Plan
-        -_sort_tasks(tasks) list~Task~
-        -_filter_by_time(tasks, available_minutes) list~Task~
-        -_assign_slots(tasks, day_start) list~ScheduledTask~
-        -_resolve_conflicts(scheduled) list~ScheduledTask~
-        -_build_reasoning(scheduled) str
+        +sort_tasks(tasks) list~Task~
+        +filter_by_time(tasks, available_minutes) list~Task~
+        +assign_slots(tasks, day_start) list~ScheduledTask~
+        +resolve_conflicts(scheduled) list~ScheduledTask~
+        +build_reasoning(scheduled) str
     }
 
     %% Arrow types refined to reflect real-world life-cycles:
