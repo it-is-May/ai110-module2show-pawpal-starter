@@ -1,35 +1,85 @@
 classDiagram
-    %% Replace the placeholders below with your actual classes, attributes, methods, and relationships.
-    %% Keep this file updated so it matches your final implementation.
-    %% Initial UML — data classes (Owner, Pet, Task, Plan) + logic class (Scheduler).
+    %% Refined UML — matches pawpal_system.py after the review fixes.
+    %% Data classes: Owner, Pet, Task, ScheduledTask, Constraints, Plan.
+    %% Logic class: Scheduler. Enums: Priority, Frequency.
 
-    class Owner {
-        +str name
-        +str preferences
+    class Priority {
+        <<enumeration>>
+        LOW
+        MEDIUM
+        HIGH
     }
 
-    class Pet {
-        +str name
-        +str species
+    class Frequency {
+        <<enumeration>>
+        ONCE
+        DAILY
+        WEEKLY
     }
 
     class Task {
         +str title
         +int duration_minutes
-        +str priority
+        +Priority priority
+        +Frequency frequency
+        +bool completed
     }
 
-    class Scheduler {
-        +generate_plan(tasks, available_minutes) Plan
+    class Pet {
+        +str name
+        +str species
+        +list~Task~ tasks
+    }
+
+    class Owner {
+        +str name
+        +str preferences
+        +list~Pet~ pets
+        +all_tasks() list~Task~
+    }
+
+    class ScheduledTask {
+        +Task task
+        +str start_time
+        +str reason
+    }
+
+    class Constraints {
+        +int available_minutes
+        +str day_start
+        +str day_end
+        +str preferences
     }
 
     class Plan {
-        +list~Task~ tasks
+        +list~ScheduledTask~ scheduled_tasks
         +str reasoning
     }
 
-    Owner --> Pet : has
-    Pet --> Task : has
-    Scheduler --> Task : takes
-    Scheduler --> Plan : produces
-    Plan --> Task : orders
+    class Scheduler {
+        +generate_plan(owner, constraints) Plan
+        -_sort_tasks(tasks) list~Task~
+        -_filter_by_time(tasks, available_minutes) list~Task~
+        -_assign_slots(tasks, day_start) list~ScheduledTask~
+        -_resolve_conflicts(scheduled) list~ScheduledTask~
+        -_build_reasoning(scheduled) str
+    }
+
+    %% Arrow types refined to reflect real-world life-cycles:
+    %%   o-- aggregation (part outlives whole), *-- composition (part dies with whole),
+    %%   ..> dependency (used in a method, not stored), --> plain association (enum value).
+    %% aggregation: a pet can outlive/change owner
+    Owner "1" o-- "many" Pet : has
+    %% composition: a task exists only for its pet
+    Pet "1" *-- "many" Task : has
+    %% association: enum value
+    Task --> Priority : uses
+    Task --> Frequency : uses
+    %% dependency: used as a param / returned, not stored
+    Scheduler ..> Owner : reads tasks from
+    Scheduler ..> Constraints : uses
+    Scheduler ..> Plan : produces
+    %% composition: scheduled rows live only in the plan
+    Plan "1" *-- "many" ScheduledTask : contains
+    %% aggregation: references an existing task
+    ScheduledTask "1" o-- "1" Task : wraps
