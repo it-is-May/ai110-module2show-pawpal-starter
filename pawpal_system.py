@@ -1,7 +1,5 @@
-"""PawPal+ system skeleton.
+"""PawPal+ system: domain classes and the Scheduler that builds a daily Plan.
 
-Class stubs generated from the initial UML design (diagrams/uml.mmd).
-No scheduling logic yet — attributes and empty method stubs only.
 """
 
 from dataclasses import dataclass, field
@@ -34,6 +32,10 @@ class Task:
     frequency: Frequency = Frequency.DAILY
     completed: bool = False
 
+    def mark_complete(self) -> None:
+        """Mark this task as done."""
+        self.completed = True
+
 
 @dataclass
 class Pet:
@@ -42,6 +44,10 @@ class Pet:
     name: str
     species: str = ""
     tasks: list[Task] = field(default_factory=list)
+
+    def add_task(self, task: Task) -> None:
+        """Attach a task to this pet."""
+        self.tasks.append(task)
 
 
 @dataclass
