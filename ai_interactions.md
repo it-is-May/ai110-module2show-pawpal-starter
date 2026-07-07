@@ -10,15 +10,20 @@
 
 **What task did you give the agent?**
 
-<!-- Describe the goal you asked the agent to accomplish -->
+I used an AI agent (Claude Code) for several multi-step tasks: debug an import error in `app.py`; connect the Streamlit UI to the backend classes (owner, pet, and task creation, plus schedule generation); add recurring-task scheduling, conflict detection, and preferred-time (`due_time`) placement to the `Scheduler`; expand the pytest suite; and keep the README, reflection, and UML diagram in sync with the code.
 
 **What did the agent do?**
 
-<!-- List the steps the agent took (files edited, commands run, etc.) -->
+- **`pawpal_system.py`** — added `filter_by_frequency` (recurrence), `detect_conflicts`, `due_time`-aware `assign_slots`, `Owner.add_pet`, and `Plan.warnings`.
+- **`app.py`** — wired the whole UI to `Owner`/`Pet`/`Task`/`Scheduler`, added multi-pet support, a custom-species field, `due_time` input, and conflict warnings.
+- **`main.py`** — rewrote the demo to run the real `generate_plan` pipeline across two pets.
+- **`tests/test_pawpal.py`** — added six tests (recurrence, sorting, time-filtering, conflict detect/resolve, due-time), bringing the suite to eight.
+- **`README.md`, `reflection.md`, `diagrams/uml.mmd`** — updated to match the code.
+- It verified behavior by running `pytest` and by driving the Streamlit app headlessly with Streamlit's `AppTest` harness, which surfaced a real bug: `st.selectbox` returns a *copy* of an object option, so adding a task mutated a throwaway pet and nothing saved.
 
 **What did you have to verify or fix manually?**
 
-<!-- Describe anything the agent got wrong or that required human review -->
+I reviewed each change before accepting it. I corrected a wrong assumption where I'd set `st.session_state.tasks = Task()` when it should stay a list; I flagged a Streamlit table layout issue with the raw `Task` objects; I rejected an awkward "(Already added since the first draft)" note the agent put in the reflection; and I made the agent re-check the actual `git log` before drafting commit messages, because its first drafts added multi-line bodies and a co-author trailer that didn't match my terse, single-line history. I also decided to keep my weekday-filter recurrence design rather than the suggested date-spawning approach, after weighing it against the app's stateless, single-day scope.
 
 ---
 
