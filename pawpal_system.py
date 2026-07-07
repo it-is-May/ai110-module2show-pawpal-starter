@@ -29,7 +29,9 @@ class Task:
     title: str
     duration_minutes: int
     priority: Priority
+    due_time: str = ""  # optional preferred time of day, "HH:MM"
     frequency: Frequency = Frequency.DAILY
+    weekday: str = ""  # which day a WEEKLY task fires, e.g. "Tuesday"
     completed: bool = False
 
     def mark_complete(self) -> None:
@@ -58,6 +60,10 @@ class Owner:
     preferences: str = ""
     pets: list[Pet] = field(default_factory=list)
 
+    def add_pet(self, pet: Pet) -> None:
+        """Attach a pet to this owner."""
+        self.pets.append(pet)
+
     def all_tasks(self) -> list[Task]:
         """Flatten and return the tasks from every pet."""
         tasks: list[Task] = []
@@ -82,6 +88,7 @@ class Constraints:
     available_minutes: int
     day_start: str = "08:00"  # when the day begins
     day_end: str = "20:00"  # when the day ends
+    weekday: str = ""  # which day this plan is for, e.g. "Tuesday"
     preferences: str = ""  # owner preferences feed the scheduler
 
 
@@ -91,6 +98,7 @@ class Plan:
 
     scheduled_tasks: list[ScheduledTask] = field(default_factory=list)
     reasoning: str = ""
+    warnings: list[str] = field(default_factory=list)  # conflicts that were resolved
 
 
 class Scheduler:
@@ -99,12 +107,37 @@ class Scheduler:
     def generate_plan(self, owner: Owner, constraints: Constraints) -> Plan:
         """Retrieve owner's tasks, then sort, filter, place, resolve, explain."""
         tasks = owner.all_tasks()
+        tasks = self.filter_by_frequency(tasks, constraints.weekday)
         tasks = self.sort_tasks(tasks)
         tasks = self.filter_by_time(tasks, constraints.available_minutes)
         scheduled = self.assign_slots(tasks, constraints.day_start)
+        # Order by start time, note any overlaps, then push them apart.
+        scheduled = sorted(scheduled, key=lambda s: self._to_minutes(s.start_time))
+        warnings = self.detect_conflicts(scheduled)
         scheduled = self.resolve_conflicts(scheduled)
         reasoning = self.build_reasoning(scheduled)
-        return Plan(scheduled_tasks=scheduled, reasoning=reasoning)
+        return Plan(scheduled_tasks=scheduled, reasoning=reasoning, warnings=warnings)
+
+    def filter_by_frequency(
+        self, tasks: list[Task], weekday: str
+    ) -> list[Task]:
+        """Keep only the tasks that are due on the planned day.
+
+        DAILY tasks are always due. WEEKLY tasks are due only when their
+        own weekday matches the plan's weekday (e.g. a weekly-Tuesday task
+        appears only on Tuesday). ONCE tasks are due until completed.
+        """
+        kept: list[Task] = []
+        for task in tasks:
+            if task.frequency == Frequency.DAILY:
+                kept.append(task)
+            elif task.frequency == Frequency.WEEKLY:
+                if task.weekday == weekday:
+                    kept.append(task)
+            elif task.frequency == Frequency.ONCE:
+                if not task.completed:
+                    kept.append(task)
+        return kept
 
     def sort_tasks(self, tasks: list[Task]) -> list[Task]:
         """Order tasks by priority (and duration as a tiebreaker).
@@ -138,23 +171,39 @@ class Scheduler:
     def assign_slots(
         self, tasks: list[Task], day_start: str
     ) -> list[ScheduledTask]:
-        """Give each kept task a start time, back to back from day_start.
+        """Give each kept task a start time.
 
-        Starts the clock at day_start ("HH:MM") and places each task right
-        after the previous one, advancing the clock by that task's duration.
+        A task with a valid preferred ``due_time`` is placed at that time;
+        tasks without one are packed back to back from day_start, advancing
+        the clock by each task's duration. Because two preferred times can
+        overlap, the resulting slots may conflict — detect_conflicts and
+        resolve_conflicts handle that afterward.
         """
         scheduled: list[ScheduledTask] = []
         current = self._to_minutes(day_start)
         for task in tasks:
+            if self._is_hhmm(task.due_time):
+                start = self._to_minutes(task.due_time)
+            else:
+                start = current
             scheduled.append(
                 ScheduledTask(
                     task=task,
-                    start_time=self._to_hhmm(current),
+                    start_time=self._to_hhmm(start),
                     reason=f"{task.priority.name} priority, {task.duration_minutes} min",
                 )
             )
-            current += task.duration_minutes
+            current = max(current, start) + task.duration_minutes
         return scheduled
+
+    @staticmethod
+    def _is_hhmm(value: str) -> bool:
+        """True if value looks like a valid 'HH:MM' 24-hour time."""
+        parts = value.split(":")
+        if len(parts) != 2 or not all(p.isdigit() for p in parts):
+            return False
+        hours, minutes = int(parts[0]), int(parts[1])
+        return 0 <= hours <= 23 and 0 <= minutes <= 59
 
     @staticmethod
     def _to_minutes(hhmm: str) -> int:
@@ -191,6 +240,28 @@ class Scheduler:
             fixed.append(slot)
             prev_end = start + slot.task.duration_minutes
         return fixed
+
+    def detect_conflicts(self, scheduled: list[ScheduledTask]) -> list[str]:
+        """Report overlapping time slots as warnings, without changing them.
+
+        Unlike resolve_conflicts (which pushes overlaps forward), this only
+        detects them and returns a human-readable warning per overlap, so a
+        caller can surface the problem instead of silently fixing it.
+        """
+        warnings: list[str] = []
+        prev_slot: ScheduledTask | None = None
+        prev_end: int | None = None
+        for slot in scheduled:
+            start = self._to_minutes(slot.start_time)
+            if prev_slot is not None and prev_end is not None and start < prev_end:
+                warnings.append(
+                    f"'{slot.task.title}' at {slot.start_time} overlaps "
+                    f"'{prev_slot.task.title}', which ends at "
+                    f"{self._to_hhmm(prev_end)}."
+                )
+            prev_slot = slot
+            prev_end = start + slot.task.duration_minutes
+        return warnings
 
     def build_reasoning(self, scheduled: list[ScheduledTask]) -> str:
         """Produce the human-readable explanation for the plan.
