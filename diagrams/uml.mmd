@@ -21,7 +21,9 @@ classDiagram
         +str title
         +int duration_minutes
         +Priority priority
+        +str due_time
         +Frequency frequency
+        +str weekday
         +bool completed
         +mark_complete() None
     }
@@ -37,6 +39,7 @@ classDiagram
         +str name
         +str preferences
         +list~Pet~ pets
+        +add_pet(pet) None
         +all_tasks() list~Task~
     }
 
@@ -50,20 +53,24 @@ classDiagram
         +int available_minutes
         +str day_start
         +str day_end
+        +str weekday
         +str preferences
     }
 
     class Plan {
         +list~ScheduledTask~ scheduled_tasks
         +str reasoning
+        +list~str~ warnings
     }
 
     class Scheduler {
         +generate_plan(owner, constraints) Plan
+        +filter_by_frequency(tasks, weekday) list~Task~
         +sort_tasks(tasks) list~Task~
         +filter_by_time(tasks, available_minutes) list~Task~
         +assign_slots(tasks, day_start) list~ScheduledTask~
         +resolve_conflicts(scheduled) list~ScheduledTask~
+        +detect_conflicts(scheduled) list~str~
         +build_reasoning(scheduled) str
     }
 
