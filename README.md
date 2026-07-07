@@ -12,6 +12,25 @@ A busy pet owner needs help staying consistent with pet care. They want an assis
 
 Your job is to design the system first (UML), then implement the logic in Python, then connect it to the Streamlit UI.
 
+## System Overview
+
+The system lives in `pawpal_system.py` and splits **data** classes from the
+**logic** class. The full class diagram is in [`diagrams/uml.mmd`](diagrams/uml.mmd).
+
+| Class | Role |
+|-------|------|
+| `Owner` | The person planning care. Holds a name, preferences, and a list of pets. Methods: `add_pet`, `all_tasks` (flattens tasks across every pet). |
+| `Pet` | An animal the tasks are for. Holds a name, species, and its own task list. Method: `add_task`. |
+| `Task` | One care task: title, duration, `Priority`, an optional `due_time`, `Frequency`, an optional `weekday` (for weekly tasks), and a `completed` flag. Method: `mark_complete`. |
+| `Scheduler` | The logic class. Takes an `Owner` plus `Constraints` and produces a `Plan` by filtering, sorting, placing, and explaining tasks across all pets. |
+| `Constraints` | The limits for a day: available minutes, day window, and which `weekday` the plan is for. |
+| `ScheduledTask` | A `Task` given a `start_time` and a per-task `reason`. |
+| `Plan` | The finished result: an ordered list of `ScheduledTask`s plus an overall `reasoning` string. |
+| `Priority` / `Frequency` | Enums for LOW/MEDIUM/HIGH and ONCE/DAILY/WEEKLY. |
+
+The **algorithmic features** the `Scheduler` implements are documented in the
+[Smarter Scheduling](#-smarter-scheduling) table below.
+
 ## What you will build
 
 Your final app should:
@@ -48,17 +67,24 @@ Sample of the CLI output from running `python main.py`:
 
 ```
 ========================================
-Today's Schedule for May
+Tuesday's Schedule for May
 ========================================
-08:00 - Morning walk (30 min)
-           why: HIGH priority task for Rex
-12:30 - Litter box cleaning (10 min)
-           why: MEDIUM priority task for Whiskers
-18:00 - Evening feeding (15 min)
-           why: HIGH priority task for Rex
+08:00 - Evening feeding (15 min)
+           why: HIGH priority, 15 min
+08:15 - Morning walk (30 min)
+           why: HIGH priority, 30 min
+08:45 - Vet visit (45 min)
+           why: HIGH priority, 45 min
+09:30 - Litter box cleaning (10 min)
+           why: MEDIUM priority, 10 min
 ----------------------------------------
-3 tasks, 55 minutes total
+4 tasks, 100 minutes total
 ```
+
+`main.py` builds one owner (May) with two pets — Rex (dog) and Whiskers (cat) —
+and four tasks, then runs the real scheduling pipeline (`Scheduler.generate_plan`)
+for a Tuesday. The vet visit is a weekly-Tuesday task, so it appears here; on
+other days it is filtered out.
 
 ## 🧪 Testing PawPal+
 
@@ -77,33 +103,57 @@ Sample test output:
 platform win32 -- Python 3.13.2, pytest-9.0.3, pluggy-1.6.0
 configfile: pytest.ini
 testpaths: tests
-collected 2 items
+plugins: anyio-4.9.0
+collected 8 items
 
-tests/test_pawpal.py::test_mark_complete_changes_status PASSED           [ 50%]
-tests/test_pawpal.py::test_adding_task_increases_pet_task_count PASSED   [100%]
+tests/test_pawpal.py::test_mark_complete_changes_status PASSED           [ 12%]
+tests/test_pawpal.py::test_adding_task_increases_pet_task_count PASSED   [ 25%]
+tests/test_pawpal.py::test_filter_by_frequency_picks_the_right_tasks_for_the_day PASSED [ 37%]
+tests/test_pawpal.py::test_sort_tasks_orders_by_priority_then_duration PASSED [ 50%]
+tests/test_pawpal.py::test_filter_by_time_drops_tasks_that_do_not_fit PASSED [ 62%]
+tests/test_pawpal.py::test_resolve_conflicts_pushes_overlaps_forward PASSED [ 75%]
+tests/test_pawpal.py::test_detect_conflicts_reports_overlaps PASSED      [ 87%]
+tests/test_pawpal.py::test_generate_plan_places_due_times_and_reports_clashes PASSED [100%]
 
-============================== 2 passed in 0.04s ==============================
+============================== 8 passed in 0.12s ==============================
 ```
+
+### Test coverage summary
+
+The suite in `tests/test_pawpal.py` covers the most important behaviors:
+
+| Test | What it verifies | Method under test |
+|------|------------------|-------------------|
+| `test_mark_complete_changes_status` | Completing a task flips its status | `Task.mark_complete` |
+| `test_adding_task_increases_pet_task_count` | Adding a task grows the pet's list | `Pet.add_task` |
+| `test_filter_by_frequency_picks_the_right_tasks_for_the_day` | Daily always shows, weekly only on its day, done-once drops | `Scheduler.filter_by_frequency` |
+| `test_sort_tasks_orders_by_priority_then_duration` | Highest priority first; shorter wins ties | `Scheduler.sort_tasks` |
+| `test_filter_by_time_drops_tasks_that_do_not_fit` | Tasks that overflow the time budget are skipped | `Scheduler.filter_by_time` |
+| `test_resolve_conflicts_pushes_overlaps_forward` | Overlapping slots are pushed forward | `Scheduler.resolve_conflicts` |
+| `test_detect_conflicts_reports_overlaps` | Overlaps are reported as warnings; clean plans report none | `Scheduler.detect_conflicts` |
+| `test_generate_plan_places_due_times_and_reports_clashes` | Preferred times are honored; a clash is warned and pushed apart | `Scheduler.generate_plan` / `assign_slots` |
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+The `Scheduler` implements these algorithmic features:
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_tasks` | Highest priority first; shorter duration wins ties |
+| Filtering | `Scheduler.filter_by_time` | Greedily keeps tasks that fit the time budget, skips ones that overflow |
+| Time placement | `Scheduler.assign_slots` | Places a task at its preferred `due_time` when given, otherwise back to back |
+| Conflict detection | `Scheduler.detect_conflicts` | Reports each overlapping slot as a warning (surfaced in the app), without changing the plan |
+| Conflict handling | `Scheduler.resolve_conflicts` | Pushes any overlapping slot forward to start when the previous task ends |
+| Recurring tasks | `Scheduler.filter_by_frequency` | Daily always; weekly only on the task's own weekday; once until completed |
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+Run the Streamlit app with `streamlit run app.py`, then follow along:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+1. **Enter the owner.** Type the owner's name at the top (e.g. "May"). It is stored once and persists as you navigate.
+2. **Add pets.** Type a pet name, pick a species (or choose "other" and type a custom one like "rabbit"), and click **Add pet**. Duplicate names are rejected. Add as many pets as you like.
+3. **Add tasks per pet.** Pick which pet the task is for, then enter a title, duration, priority, and frequency. For a **weekly** task, also choose the day it recurs (e.g. Vet visit → Tuesday). Click **Add task**; the task table updates with a row per task.
+4. **Choose the day and time budget.** Under *Build Schedule*, set the available minutes and the weekday to plan for.
+5. **Generate the schedule.** Click **Generate schedule**. The app runs `Scheduler.generate_plan` across all pets and shows each task with its start time and reason, plus an overall explanation. Weekly tasks appear only when their day matches the chosen weekday.
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
