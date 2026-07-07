@@ -12,6 +12,16 @@ A busy pet owner needs help staying consistent with pet care. They want an assis
 
 Your job is to design the system first (UML), then implement the logic in Python, then connect it to the Streamlit UI.
 
+## What you will build
+
+Your final app should:
+
+- Let a user enter basic owner + pet info
+- Let a user add/edit tasks (duration + priority at minimum)
+- Generate a daily schedule/plan based on constraints and priorities
+- Display the plan clearly (and ideally explain the reasoning)
+- Include tests for the most important scheduling behaviors
+
 ## System Overview
 
 The system lives in `pawpal_system.py` and splits **data** classes from the
@@ -30,16 +40,6 @@ The system lives in `pawpal_system.py` and splits **data** classes from the
 
 The **algorithmic features** the `Scheduler` implements are documented in the
 [Smarter Scheduling](#-smarter-scheduling) table below.
-
-## What you will build
-
-Your final app should:
-
-- Let a user enter basic owner + pet info
-- Let a user add/edit tasks (duration + priority at minimum)
-- Generate a daily schedule/plan based on constraints and priorities
-- Display the plan clearly (and ideally explain the reasoning)
-- Include tests for the most important scheduling behaviors
 
 ## Getting started
 
@@ -155,5 +155,3 @@ Run the Streamlit app with `streamlit run app.py`, then follow along:
 3. **Add tasks per pet.** Pick which pet the task is for, then enter a title, duration, priority, and frequency. For a **weekly** task, also choose the day it recurs (e.g. Vet visit → Tuesday). Click **Add task**; the task table updates with a row per task.
 4. **Choose the day and time budget.** Under *Build Schedule*, set the available minutes and the weekday to plan for.
 5. **Generate the schedule.** Click **Generate schedule**. The app runs `Scheduler.generate_plan` across all pets and shows each task with its start time and reason, plus an overall explanation. Weekly tasks appear only when their day matches the chosen weekday.
-
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
